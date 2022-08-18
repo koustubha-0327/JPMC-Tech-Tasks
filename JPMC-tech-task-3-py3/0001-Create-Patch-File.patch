@@ -1,0 +1,150 @@
+From 9a7ddea8e49c6453942c322dc014486316d26562 Mon Sep 17 00:00:00 2001
+From: DEBBATA KOUSTHUBHA <21211a0568@bvrit.ac.in>
+Date: Thu, 4 Aug 2022 21:48:59 +0530
+Subject: [PATCH] Create Patch File
+
+---
+ src/DataManipulator.ts | 39 ++++++++++++++++++++++++++-------------
+ src/Graph.tsx          | 41 +++++++++++++++++++++++------------------
+ 2 files changed, 49 insertions(+), 31 deletions(-)
+
+diff --git a/src/DataManipulator.ts b/src/DataManipulator.ts
+index f6b15ff..bfecd62 100644
+--- a/src/DataManipulator.ts
++++ b/src/DataManipulator.ts
+@@ -1,20 +1,33 @@
+ import { ServerRespond } from './DataStreamer';
+-
++ 
+ export interface Row {
+-  stock: string,
+-  top_ask_price: number,
++  price_abc: number,
++  price_def: number,
++  ratio: number,
+   timestamp: Date,
++  upper_bound: number,
++  lower_bound: number,
++  trigger_alert: number | undefined,
+ }
+-
+-
++ 
++ 
+ export class DataManipulator {
+-  static generateRow(serverResponds: ServerRespond[]): Row[] {
+-    return serverResponds.map((el: any) => {
+-      return {
+-        stock: el.stock,
+-        top_ask_price: el.top_ask && el.top_ask.price || 0,
+-        timestamp: el.timestamp,
+-      };
+-    })
++  static generateRow(serverRespond: ServerRespond[]): Row {
++    const priceABC= (serverRespond[0].top_ask.price+serverRespond[0].top_bid.price)/2;
++    const priceDEF= (serverRespond[1].top_ask.price+serverRespond[1].top_bid.price)/2;
++    const ratio = priceABC/priceDEF;
++    const upperBound=1+0.05;
++    const lowerBound=1-0.05;
++    return {
++      price_abc: priceABC,
++      price_def: priceDEF,
++      ratio,
++      timestamp: serverRespond[0].timestamp > serverRespond[1].timestamp ?
++        serverRespond[0].timestamp : serverRespond[1].timestamp,
++      upper_bound: upperBound,
++      lower_bound: lowerBound,
++      trigger_alert: (ratio > upperBound || ratio < lowerBound) ? ratio : undefined,
++ 
++    };
+   }
+ }
+diff --git a/src/Graph.tsx b/src/Graph.tsx
+index 58fb997..f931546 100644
+--- a/src/Graph.tsx
++++ b/src/Graph.tsx
+@@ -3,32 +3,35 @@ import { Table } from '@jpmorganchase/perspective';
+ import { ServerRespond } from './DataStreamer';
+ import { DataManipulator } from './DataManipulator';
+ import './Graph.css';
+-
++ 
+ interface IProps {
+   data: ServerRespond[],
+ }
+-
++ 
+ interface PerspectiveViewerElement extends HTMLElement {
+   load: (table: Table) => void,
+ }
+ class Graph extends Component<IProps, {}> {
+   table: Table | undefined;
+-
++ 
+   render() {
+     return React.createElement('perspective-viewer');
+   }
+-
++ 
+   componentDidMount() {
+     // Get element from the DOM.
+     const elem = document.getElementsByTagName('perspective-viewer')[0] as unknown as PerspectiveViewerElement;
+-
++ 
+     const schema = {
+-      stock: 'string',
+-      top_ask_price: 'float',
+-      top_bid_price: 'float',
++      price_abc: 'float',
++      price_def: 'float',
++      ratio: 'float',
+       timestamp: 'date',
++      upper_bound: 'float',
++      lower_bound: 'float',
++      trigger_alert: 'float',
+     };
+-
++ 
+     if (window.perspective && window.perspective.worker()) {
+       this.table = window.perspective.worker().table(schema);
+     }
+@@ -36,25 +39,27 @@ class Graph extends Component<IProps, {}> {
+       // Load the `table` in the `<perspective-viewer>` DOM reference.
+       elem.load(this.table);
+       elem.setAttribute('view', 'y_line');
+-      elem.setAttribute('column-pivots', '["stock"]');
+       elem.setAttribute('row-pivots', '["timestamp"]');
+-      elem.setAttribute('columns', '["top_ask_price"]');
++      elem.setAttribute('columns', '["ratio", "lower_bound", "upper_bound", "trigger_alert"]');
+       elem.setAttribute('aggregates', JSON.stringify({
+-        stock: 'distinctcount',
+-        top_ask_price: 'avg',
+-        top_bid_price: 'avg',
++        price_abc: 'avg',
++        price_def: 'avg',
++        ratio: 'avg',
+         timestamp: 'distinct count',
++        upper_bound: 'avg',
++        lower_bound: 'avg',
++        trigger_alert: 'avg',
+       }));
+     }
+   }
+-
++ 
+   componentDidUpdate() {
+     if (this.table) {
+-      this.table.update(
++      this.table.update([
+         DataManipulator.generateRow(this.props.data),
+-      );
++      ]);
+     }
+   }
+ }
+-
++ 
+ export default Graph;
+-- 
+2.37.1.windows.1
+
